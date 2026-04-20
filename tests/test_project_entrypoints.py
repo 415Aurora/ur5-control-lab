@@ -35,8 +35,10 @@ def test_run_project_supports_default_and_app_only_modes() -> None:
     content = read("run_project.sh")
     assert "--app-only" in content
     assert "roslaunch ur_gazebo ur5_bringup.launch" in content
+    assert "roslaunch ur5_moveit_config moveit_planning_execution.launch sim:=true" in content
     assert "rosrun ur5_control_lab main.py" in content
     assert "joint_states" in content
+    assert "/move_group/status" in content
 
 
 def test_docker_uses_shared_requirements_and_entrypoint() -> None:
@@ -100,6 +102,8 @@ def test_docker_entrypoint_uses_guarded_source_for_ros_setup() -> None:
     assert 'source_with_nounset_guard "/opt/ros/noetic/setup.bash"' in content
     assert 'source "$ROOT_DIR/devel/setup.bash"' not in content
     assert 'source /opt/ros/noetic/setup.bash' not in content
+    assert "roslaunch ur5_moveit_config moveit_planning_execution.launch sim:=true" in content
+    assert "/move_group/status" in content
 
 
 def test_run_project_uses_guarded_source_for_ros_and_workspace_setup() -> None:
@@ -139,3 +143,10 @@ def test_readme_mentions_docker_export_persistence() -> None:
     assert "./run_docker.sh" in content
     assert "exports/experiments" in content
     assert "host" in content.lower() or "宿主" in content
+
+
+def test_readme_mentions_default_moveit_startup_and_cartesian_planning() -> None:
+    content = read("README.md")
+    assert "MoveIt" in content
+    assert "Cartesian" in content or "cartesian" in content
+    assert "X/Y/Z" in content or "position target" in content.lower()

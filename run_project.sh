@@ -6,6 +6,7 @@ WORKSPACE_SETUP="$ROOT_DIR/devel/setup.bash"
 VENV_SETUP="$ROOT_DIR/ur5_env/bin/activate"
 APP_ONLY=false
 SIM_PID=""
+MOVEIT_PID=""
 
 log() {
     echo "[run_project] $*"
@@ -35,6 +36,11 @@ cleanup() {
         log "Stopping Gazebo launch (PID $SIM_PID)..."
         kill "$SIM_PID" 2>/dev/null || true
         wait "$SIM_PID" 2>/dev/null || true
+    fi
+    if [[ -n "$MOVEIT_PID" ]] && kill -0 "$MOVEIT_PID" 2>/dev/null; then
+        log "Stopping MoveIt launch (PID $MOVEIT_PID)..."
+        kill "$MOVEIT_PID" 2>/dev/null || true
+        wait "$MOVEIT_PID" 2>/dev/null || true
     fi
 }
 
@@ -104,12 +110,36 @@ wait_for_topic() {
     exit 1
 }
 
+wait_for_service() {
+    local service="$1"
+    local timeout_seconds="${2:-60}"
+    local elapsed=0
+
+    log "Waiting for service $service ..."
+    while (( elapsed < timeout_seconds )); do
+        if rosservice list 2>/dev/null | grep -Fxq "$service"; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    echo "Timed out waiting for ROS service $service" >&2
+    exit 1
+}
+
 launch_simulation() {
     log "Launching Gazebo bringup..."
     roslaunch ur_gazebo ur5_bringup.launch &
     SIM_PID=$!
     wait_for_topic "/joint_states" 60
     wait_for_topic "/eff_joint_traj_controller/follow_joint_trajectory/goal" 60
+
+    log "Launching MoveIt planning execution..."
+    roslaunch ur5_moveit_config moveit_planning_execution.launch sim:=true &
+    MOVEIT_PID=$!
+    wait_for_topic "/move_group/status" 60
+    wait_for_service "/get_planning_scene" 60
 }
 
 run_gui() {
@@ -139,7 +169,7 @@ ensure_python_module customtkinter
 if [[ "$APP_ONLY" == false ]]; then
     launch_simulation
 else
-    log "App-only mode enabled. Assuming ROS master and Gazebo are already running."
+    log "App-only mode enabled. Assuming ROS master, Gazebo, and MoveIt are already running."
 fi
 
 run_gui

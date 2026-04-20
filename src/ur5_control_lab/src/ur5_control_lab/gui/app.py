@@ -26,6 +26,7 @@ from ur5_control_lab.core.experiments import (
     export_experiment_record,
     format_metrics_summary,
 )
+from ur5_control_lab.core.moveit_interface import MoveItPositionPlanner
 
 # Import GUI
 from ur5_control_lab.gui.widgets import Matrix4x4View, DHTableView, JointInput
@@ -61,7 +62,11 @@ class UR5LabApp(ctk.CTk):
         self.latest_experiment = None
         self.last_export_paths = None
         self.experiment_output_dir = self._resolve_project_root() / "exports" / "experiments"
+        self.moveit_planner = None
+        self.moveit_error = None
         self.running = True
+
+        self._initialize_moveit()
         
         # UI
         self.setup_ui()
@@ -83,6 +88,12 @@ class UR5LabApp(ctk.CTk):
 
     def _resolve_project_root(self):
         return Path(__file__).resolve().parents[5]
+
+    def _initialize_moveit(self):
+        try:
+            self.moveit_planner = MoveItPositionPlanner()
+        except Exception as exc:
+            self.moveit_error = str(exc)
 
     def setup_ui(self):
         self.title("UR5 Control Lab - Professional Edition")
@@ -235,6 +246,44 @@ class UR5LabApp(ctk.CTk):
             self.joint_inputs.append(ji)
 
         ctk.CTkButton(ctrl, text="Plan & Execute", command=self.plan_joint, height=40, font=ctk.CTkFont(size=14, weight="bold")).pack(pady=20)
+
+        cartesian_frame = ctk.CTkFrame(parent)
+        cartesian_frame.pack(fill="x", pady=(0, 20), padx=20)
+        ctk.CTkLabel(
+            cartesian_frame,
+            text="Cartesian Position Target (X/Y/Z in meters)",
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(pady=(15, 10))
+
+        cartesian_inputs = ctk.CTkFrame(cartesian_frame, fg_color="transparent")
+        cartesian_inputs.pack(fill="x", padx=10, pady=(0, 10))
+        for column in range(3):
+            cartesian_inputs.grid_columnconfigure(column, weight=1)
+
+        self.entry_target_x = ctk.CTkEntry(cartesian_inputs)
+        self.entry_target_y = ctk.CTkEntry(cartesian_inputs)
+        self.entry_target_z = ctk.CTkEntry(cartesian_inputs)
+        for idx, (label, entry) in enumerate(
+            [("X", self.entry_target_x), ("Y", self.entry_target_y), ("Z", self.entry_target_z)]
+        ):
+            ctk.CTkLabel(cartesian_inputs, text=label).grid(row=0, column=idx, padx=10, pady=(0, 5), sticky="w")
+            entry.grid(row=1, column=idx, padx=10, pady=(0, 10), sticky="ew")
+
+        self.btn_cartesian_plan = ctk.CTkButton(
+            cartesian_frame,
+            text="Plan & Execute Cartesian",
+            command=self.plan_cartesian_position,
+            height=40,
+            font=ctk.CTkFont(size=14, weight="bold"),
+        )
+        self.btn_cartesian_plan.pack(pady=(0, 10))
+        if self.moveit_error is not None:
+            self.btn_cartesian_plan.configure(state="disabled")
+
+        default_cartesian_status = "Cartesian planner ready" if self.moveit_error is None else f"Cartesian planner unavailable: {self.moveit_error}"
+        default_cartesian_color = "silver" if self.moveit_error is None else "orange"
+        self.cartesian_status = ctk.CTkLabel(parent, text=default_cartesian_status, text_color=default_cartesian_color, font=ctk.CTkFont(size=15))
+        self.cartesian_status.pack(pady=(0, 10))
         
         self.plan_status = ctk.CTkLabel(parent, text="Status: Ready", font=ctk.CTkFont(size=16))
         self.plan_status.pack(pady=20)
@@ -432,6 +481,20 @@ class UR5LabApp(ctk.CTk):
         self.entry_experiment_name.delete(0, "end")
         self.entry_experiment_name.insert(0, self._default_experiment_name())
 
+    def _build_position_experiment_config(self, target_joint_positions):
+        target_joint_deg = [float(np.degrees(value)) for value in target_joint_positions]
+        return ExperimentConfig(
+            name=self.entry_experiment_name.get().strip() or self._default_experiment_name(),
+            target_joints_deg=target_joint_deg,
+            duration_seconds=float(self.entry_duration.get().strip() or "4.0"),
+            planner_id="moveit_position",
+            sample_rate_hz=10.0,
+            notes=(
+                f"Cartesian target x={self.entry_target_x.get().strip()} "
+                f"y={self.entry_target_y.get().strip()} z={self.entry_target_z.get().strip()}"
+            ),
+        )
+
     def move_to_preset(self, name):
         targets = {
             "home": [0, -1.57, 0, -1.57, 0, 0],
@@ -477,6 +540,65 @@ class UR5LabApp(ctk.CTk):
             )
         except Exception as e:
             self.plan_status.configure(text=f"Error: {e}", text_color="red")
+
+    def plan_cartesian_position(self):
+        if self.moveit_planner is None:
+            self.cartesian_status.configure(
+                text=f"Cartesian planner unavailable: {self.moveit_error}",
+                text_color="orange",
+            )
+            return
+
+        try:
+            x = float(self.entry_target_x.get())
+            y = float(self.entry_target_y.get())
+            z = float(self.entry_target_z.get())
+        except ValueError:
+            self.cartesian_status.configure(
+                text="Cartesian target must be valid X/Y/Z numbers",
+                text_color="red",
+            )
+            return
+
+        self.cartesian_status.configure(text="Cartesian status: Planning...", text_color="yellow")
+        threading.Thread(
+            target=self._run_cartesian_position_plan,
+            args=(x, y, z),
+            daemon=True,
+        ).start()
+
+    def _run_cartesian_position_plan(self, x, y, z):
+        result = self.moveit_planner.plan_position_target(x, y, z)
+        if not result["success"]:
+            self.after(0, lambda: self.cartesian_status.configure(
+                text=f"Cartesian status: {result['message']}",
+                text_color="red",
+            ))
+            return
+
+        target_joint_positions = result["target_joint_positions"] or list(self.current_joints)
+        config = self._build_position_experiment_config(target_joint_positions)
+        self._start_experiment_recording(config)
+        self.after(0, lambda: self.cartesian_status.configure(
+            text="Cartesian status: Executing...",
+            text_color="green",
+        ))
+
+        warning_message = None
+        try:
+            if not self.moveit_planner.execute_plan(result["plan"]):
+                warning_message = "MoveIt execution failed"
+        except Exception as exc:
+            warning_message = f"MoveIt execution failed: {exc}"
+        finally:
+            self._finish_experiment_recording(warning_message=warning_message)
+
+        final_status = "Cartesian status: Succeeded" if warning_message is None else f"Cartesian status: {warning_message}"
+        final_color = "#50FA7B" if warning_message is None else "orange"
+        self.after(0, lambda: self.cartesian_status.configure(
+            text=final_status,
+            text_color=final_color,
+        ))
 
     def execute_trajectory(self, waypoints, duration, experiment_config=None):
         g = FollowJointTrajectoryGoal()
