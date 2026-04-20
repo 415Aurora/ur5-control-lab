@@ -28,6 +28,11 @@ from ur5_control_lab.core.experiments import (
     format_metrics_summary,
 )
 from ur5_control_lab.core.moveit_interface import MoveItPositionPlanner
+from ur5_control_lab.core.pose_targets import (
+    euler_degrees_from_rotation_matrix,
+    parse_pose_target_values,
+    quaternion_from_euler_degrees,
+)
 
 # Import GUI
 from ur5_control_lab.gui.widgets import Matrix4x4View, DHTableView, JointInput
@@ -95,24 +100,6 @@ class UR5LabApp(ctk.CTk):
             self.moveit_planner = MoveItPositionPlanner()
         except Exception as exc:
             self.moveit_error = str(exc)
-
-    def _quaternion_from_euler_degrees(self, roll_deg, pitch_deg, yaw_deg):
-        roll = math.radians(roll_deg)
-        pitch = math.radians(pitch_deg)
-        yaw = math.radians(yaw_deg)
-
-        cy = math.cos(yaw * 0.5)
-        sy = math.sin(yaw * 0.5)
-        cp = math.cos(pitch * 0.5)
-        sp = math.sin(pitch * 0.5)
-        cr = math.cos(roll * 0.5)
-        sr = math.sin(roll * 0.5)
-
-        qw = cr * cp * cy + sr * sp * sy
-        qx = sr * cp * cy - cr * sp * sy
-        qy = cr * sp * cy + sr * cp * sy
-        qz = cr * cp * sy - sr * sp * cy
-        return qx, qy, qz, qw
 
     def setup_ui(self):
         self.title("UR5 Control Lab - Professional Edition")
@@ -298,6 +285,37 @@ class UR5LabApp(ctk.CTk):
             ctk.CTkLabel(cartesian_inputs, text=label).grid(row=0, column=idx, padx=10, pady=(0, 5), sticky="w")
             entry.grid(row=1, column=idx, padx=10, pady=(0, 10), sticky="ew")
 
+        for entry, default in (
+            (self.entry_target_x, "0.30"),
+            (self.entry_target_y, "0.00"),
+            (self.entry_target_z, "0.40"),
+            (self.entry_target_roll, "0.0"),
+            (self.entry_target_pitch, "0.0"),
+            (self.entry_target_yaw, "0.0"),
+        ):
+            entry.insert(0, default)
+
+        quick_actions = ctk.CTkFrame(cartesian_frame, fg_color="transparent")
+        quick_actions.pack(fill="x", padx=10, pady=(0, 10))
+        for column in range(3):
+            quick_actions.grid_columnconfigure(column, weight=1)
+
+        ctk.CTkButton(
+            quick_actions,
+            text="Use Current Pose",
+            command=self.use_current_pose_target,
+        ).grid(row=0, column=0, padx=10, pady=5, sticky="ew")
+        ctk.CTkButton(
+            quick_actions,
+            text="Copy Current Orientation",
+            command=self.copy_current_orientation,
+        ).grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+        ctk.CTkButton(
+            quick_actions,
+            text="Neutral Orientation",
+            command=self.set_neutral_orientation,
+        ).grid(row=0, column=2, padx=10, pady=5, sticky="ew")
+
         self.btn_cartesian_plan = ctk.CTkButton(
             cartesian_frame,
             text="Plan & Execute Cartesian Pose",
@@ -313,6 +331,16 @@ class UR5LabApp(ctk.CTk):
         default_cartesian_color = "silver" if self.moveit_error is None else "orange"
         self.cartesian_status = ctk.CTkLabel(parent, text=default_cartesian_status, text_color=default_cartesian_color, font=ctk.CTkFont(size=15))
         self.cartesian_status.pack(pady=(0, 10))
+
+        details_frame = ctk.CTkFrame(parent)
+        details_frame.pack(fill="x", padx=20, pady=(0, 10))
+        ctk.CTkLabel(details_frame, text="Planner Details", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=12, pady=(12, 6))
+        self.lbl_current_pose = ctk.CTkLabel(details_frame, text="Current Pose: --", justify="left", font=ctk.CTkFont(family="Monospace", size=12))
+        self.lbl_current_pose.pack(anchor="w", padx=12, pady=2)
+        self.lbl_target_pose = ctk.CTkLabel(details_frame, text="Target Pose: --", justify="left", font=ctk.CTkFont(family="Monospace", size=12))
+        self.lbl_target_pose.pack(anchor="w", padx=12, pady=2)
+        self.lbl_planner_details = ctk.CTkLabel(details_frame, text="Planner Details: waiting for request", justify="left", font=ctk.CTkFont(family="Monospace", size=12))
+        self.lbl_planner_details.pack(anchor="w", padx=12, pady=(2, 12))
         
         self.plan_status = ctk.CTkLabel(parent, text="Status: Ready", font=ctk.CTkFont(size=16))
         self.plan_status.pack(pady=20)
@@ -510,6 +538,45 @@ class UR5LabApp(ctk.CTk):
         self.entry_experiment_name.delete(0, "end")
         self.entry_experiment_name.insert(0, self._default_experiment_name())
 
+    def _set_entry_value(self, entry, value):
+        entry.delete(0, "end")
+        entry.insert(0, value)
+
+    def _get_current_pose_target_values(self):
+        transform = self.kin_mod.compute_fk(self.current_joints)
+        position = transform[:3, 3]
+        roll_deg, pitch_deg, yaw_deg = euler_degrees_from_rotation_matrix(transform[:3, :3])
+        return position[0], position[1], position[2], roll_deg, pitch_deg, yaw_deg
+
+    def use_current_pose_target(self):
+        x, y, z, roll_deg, pitch_deg, yaw_deg = self._get_current_pose_target_values()
+        for entry, value in (
+            (self.entry_target_x, f"{x:.3f}"),
+            (self.entry_target_y, f"{y:.3f}"),
+            (self.entry_target_z, f"{z:.3f}"),
+            (self.entry_target_roll, f"{roll_deg:.1f}"),
+            (self.entry_target_pitch, f"{pitch_deg:.1f}"),
+            (self.entry_target_yaw, f"{yaw_deg:.1f}"),
+        ):
+            self._set_entry_value(entry, value)
+
+    def copy_current_orientation(self):
+        _, _, _, roll_deg, pitch_deg, yaw_deg = self._get_current_pose_target_values()
+        for entry, value in (
+            (self.entry_target_roll, f"{roll_deg:.1f}"),
+            (self.entry_target_pitch, f"{pitch_deg:.1f}"),
+            (self.entry_target_yaw, f"{yaw_deg:.1f}"),
+        ):
+            self._set_entry_value(entry, value)
+
+    def set_neutral_orientation(self):
+        for entry in (
+            self.entry_target_roll,
+            self.entry_target_pitch,
+            self.entry_target_yaw,
+        ):
+            self._set_entry_value(entry, "0.0")
+
     def _build_moveit_experiment_config(self, target_joint_positions, planner_id):
         target_joint_deg = [float(np.degrees(value)) for value in target_joint_positions]
         return ExperimentConfig(
@@ -525,6 +592,34 @@ class UR5LabApp(ctk.CTk):
                 f"yaw={self.entry_target_yaw.get().strip()}"
             ),
         )
+
+    def _format_pose_summary_line(self, label, summary):
+        if not summary:
+            return f"{label}: --"
+        pos = summary["position_xyz"]
+        ori = summary["orientation_xyzw"]
+        return (
+            f"{label}: "
+            f"pos=({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}) "
+            f"quat=({ori[0]:.3f}, {ori[1]:.3f}, {ori[2]:.3f}, {ori[3]:.3f})"
+        )
+
+    def _update_planner_feedback(self, result):
+        current_pose_text = self._format_pose_summary_line(
+            "Current Pose",
+            result.get("current_pose_summary"),
+        )
+        target_pose_text = self._format_pose_summary_line(
+            "Target Pose",
+            result.get("target_pose_summary"),
+        )
+        details_text = (
+            "Planner Details: "
+            f"{result.get('message', '--')} | {result.get('details', '--')}"
+        )
+        self.after(0, lambda: self.lbl_current_pose.configure(text=current_pose_text))
+        self.after(0, lambda: self.lbl_target_pose.configure(text=target_pose_text))
+        self.after(0, lambda: self.lbl_planner_details.configure(text=details_text))
 
     def move_to_preset(self, name):
         targets = {
@@ -581,15 +676,17 @@ class UR5LabApp(ctk.CTk):
             return
 
         try:
-            x = float(self.entry_target_x.get())
-            y = float(self.entry_target_y.get())
-            z = float(self.entry_target_z.get())
-            roll = float(self.entry_target_roll.get() or "0.0")
-            pitch = float(self.entry_target_pitch.get() or "0.0")
-            yaw = float(self.entry_target_yaw.get() or "0.0")
-        except ValueError:
+            x, y, z, roll, pitch, yaw = parse_pose_target_values(
+                self.entry_target_x.get(),
+                self.entry_target_y.get(),
+                self.entry_target_z.get(),
+                self.entry_target_roll.get(),
+                self.entry_target_pitch.get(),
+                self.entry_target_yaw.get(),
+            )
+        except ValueError as exc:
             self.cartesian_status.configure(
-                text="Cartesian target must be valid X/Y/Z/Roll/Pitch/Yaw numbers",
+                text=str(exc),
                 text_color="red",
             )
             return
@@ -602,8 +699,9 @@ class UR5LabApp(ctk.CTk):
         ).start()
 
     def _run_cartesian_pose_plan(self, x, y, z, roll, pitch, yaw):
-        qx, qy, qz, qw = self._quaternion_from_euler_degrees(roll, pitch, yaw)
+        qx, qy, qz, qw = quaternion_from_euler_degrees(roll, pitch, yaw)
         result = self.moveit_planner.plan_pose_target(x, y, z, qx, qy, qz, qw)
+        self._update_planner_feedback(result)
         if not result["success"]:
             self.after(0, lambda: self.cartesian_status.configure(
                 text=f"Cartesian pose status: {result['message']}",
@@ -630,6 +728,9 @@ class UR5LabApp(ctk.CTk):
 
         final_status = "Cartesian pose status: Succeeded" if warning_message is None else f"Cartesian pose status: {warning_message}"
         final_color = "#50FA7B" if warning_message is None else "orange"
+        if warning_message is not None:
+            result["details"] = warning_message
+            self._update_planner_feedback(result)
         self.after(0, lambda: self.cartesian_status.configure(
             text=final_status,
             text_color=final_color,

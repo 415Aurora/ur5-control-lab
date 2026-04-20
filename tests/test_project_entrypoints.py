@@ -76,6 +76,12 @@ def test_gui_export_directory_matches_docker_exports_mount() -> None:
     assert "Roll" in app
     assert "Pitch" in app
     assert "Yaw" in app
+    assert "Use Current Pose" in app
+    assert "Copy Current Orientation" in app
+    assert "Neutral Orientation" in app
+    assert "Current Pose" in app
+    assert "Target Pose" in app
+    assert "Planner Details" in app
 
 
 def test_package_manifest_covers_runtime_dependencies() -> None:

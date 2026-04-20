@@ -60,6 +60,21 @@ class MoveItPositionPlanner:
             return []
         return list(plan.joint_trajectory.points[-1].positions)
 
+    def _pose_summary(self, pose: Any) -> dict[str, list[float]]:
+        return {
+            "position_xyz": [
+                float(pose.position.x),
+                float(pose.position.y),
+                float(pose.position.z),
+            ],
+            "orientation_xyzw": [
+                float(pose.orientation.x),
+                float(pose.orientation.y),
+                float(pose.orientation.z),
+                float(pose.orientation.w),
+            ],
+        }
+
     def plan_position_target(self, x: float, y: float, z: float) -> dict[str, Any]:
         current_pose = self.group.get_current_pose().pose
         target_pose = self._copy_pose_with_position(current_pose, x, y, z)
@@ -80,6 +95,7 @@ class MoveItPositionPlanner:
         return self._plan_target_pose(target_pose, "moveit_pose")
 
     def _plan_target_pose(self, target_pose: Any, planner_id: str) -> dict[str, Any]:
+        current_pose = self.group.get_current_pose().pose
         self.group.set_pose_target(target_pose)
 
         success, plan = self._normalize_plan_result(self.group.plan())
@@ -89,8 +105,11 @@ class MoveItPositionPlanner:
                 "success": False,
                 "planner_id": planner_id,
                 "message": "MoveIt planning failed",
+                "details": "No valid trajectory points returned by MoveIt",
                 "plan": None,
+                "current_pose_summary": self._pose_summary(current_pose),
                 "target_pose": target_pose,
+                "target_pose_summary": self._pose_summary(target_pose),
                 "target_joint_positions": [],
             }
 
@@ -98,8 +117,11 @@ class MoveItPositionPlanner:
             "success": True,
             "planner_id": planner_id,
             "message": "MoveIt plan ready",
+            "details": "MoveIt returned a trajectory plan",
             "plan": plan,
+            "current_pose_summary": self._pose_summary(current_pose),
             "target_pose": target_pose,
+            "target_pose_summary": self._pose_summary(target_pose),
             "target_joint_positions": self._extract_joint_positions(plan),
         }
 
@@ -117,9 +139,11 @@ class MoveItPositionPlanner:
         if not self.execute_plan(result["plan"]):
             result["success"] = False
             result["message"] = "MoveIt execution failed"
+            result["details"] = "MoveIt could not execute the planned trajectory"
             return result
 
         result["message"] = "MoveIt execution succeeded"
+        result["details"] = "MoveIt executed the planned trajectory successfully"
         return result
 
     def plan_and_execute_pose_target(
@@ -139,7 +163,9 @@ class MoveItPositionPlanner:
         if not self.execute_plan(result["plan"]):
             result["success"] = False
             result["message"] = "MoveIt execution failed"
+            result["details"] = "MoveIt could not execute the planned trajectory"
             return result
 
         result["message"] = "MoveIt execution succeeded"
+        result["details"] = "MoveIt executed the planned trajectory successfully"
         return result

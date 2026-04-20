@@ -119,3 +119,22 @@ def test_plan_pose_target_overrides_orientation_components() -> None:
     assert planner.group.target_pose.orientation.z == 0.33
     assert planner.group.target_pose.orientation.w == 0.44
     assert result["planner_id"] == "moveit_pose"
+    assert result["current_pose_summary"]["position_xyz"] == [0.1, 0.2, 0.3]
+    assert result["target_pose_summary"]["position_xyz"] == [0.9, 0.8, 0.7]
+    assert result["target_pose_summary"]["orientation_xyzw"] == [0.11, 0.22, 0.33, 0.44]
+
+
+def test_failed_moveit_plan_reports_pose_summaries_and_reason() -> None:
+    current_pose = _make_pose(0.3, 0.2, 0.1, 0.0, 0.0, 0.0, 1.0)
+    empty_plan = SimpleNamespace(joint_trajectory=SimpleNamespace(points=[]))
+    planner = MoveItPositionPlanner(
+        move_group=FakeMoveGroup(current_pose, (False, empty_plan, 0.0, None))
+    )
+
+    result = planner.plan_pose_target(0.4, 0.5, 0.6, 0.0, 0.0, 0.0, 1.0)
+
+    assert result["success"] is False
+    assert result["message"] == "MoveIt planning failed"
+    assert result["details"] == "No valid trajectory points returned by MoveIt"
+    assert result["current_pose_summary"]["position_xyz"] == [0.3, 0.2, 0.1]
+    assert result["target_pose_summary"]["position_xyz"] == [0.4, 0.5, 0.6]
