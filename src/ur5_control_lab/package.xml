@@ -4,7 +4,7 @@
   <version>0.1.0</version>
   <description>The ur5_control_lab package for custom UR5 control scripts</description>
   <maintainer email="user@todo.todo">User</maintainer>
-  <license>TODO</license>
+  <license>BSD-3-Clause</license>
 
   <buildtool_depend>catkin</buildtool_depend>
   <depend>actionlib</depend>

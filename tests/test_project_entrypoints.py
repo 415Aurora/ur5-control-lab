@@ -82,6 +82,18 @@ def test_package_manifest_covers_runtime_dependencies() -> None:
         assert token in manifest
 
 
+def test_project_declares_bsd_3_clause_license() -> None:
+    license_file = REPO_ROOT / "LICENSE"
+    assert license_file.exists()
+
+    license_text = license_file.read_text()
+    assert "Redistribution and use in source and binary forms" in license_text
+    assert "Neither the name of the copyright holder" in license_text
+
+    manifest = read("src/ur5_control_lab/package.xml")
+    assert "<license>BSD-3-Clause</license>" in manifest
+
+
 def test_docker_entrypoint_uses_guarded_source_for_ros_setup() -> None:
     content = read("docker_entrypoint.sh")
     assert "source_with_nounset_guard()" in content
