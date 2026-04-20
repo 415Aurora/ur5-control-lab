@@ -1,0 +1,9 @@
+.catkin_workspace
+.pytest_cache/
+build/
+devel/
+exports/
+ur5_env/
+
+__pycache__/
+*.py[cod]

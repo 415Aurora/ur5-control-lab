@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    主要入口文件：将单个 UR5 机器人加载到 Gazebo 的空世界中。
+
+    类似于 ur_robot_driver 加载的 ros_control 控制器集将由 'ur_control.launch.xml' 加载
+    (注意：虽然相似，但并不完全相同)。
+
+    这个启动文件 (.launch) 故意使用了与 ur_robot_driver 包中相同的文件名，
+    因为它起着类似的作用：加载配置并启动必要的 ROS 节点，最终为 Universal Robots UR5
+    提供 ROS API。唯一的区别是，这里使用的是 Gazebo 中的虚拟模型，而不是真实机器人。
+
+    注意 1：由于这不是真实机器人，仿真的保真度有限。动态行为将与真实机器人不同。
+    仅支持部分 topic、action 和 service。具体来说，不支持与控制箱本身的交互，
+    因为 Gazebo 不模拟控制箱。这意味着：没有 Dashboard 服务器，没有 URScript topic，
+    也没有力矩传感器等。
+
+    注意 2：希望将 UR5 与其他模型集成到更复杂仿真中的用户不应修改此文件。
+    相反，如果希望在自定义仿真中复用此文件，应创建一个副本并更新该副本以适应所需的更改。
+
+    在这些情况下，请将此文件视为示例，展示如何启动 UR 机器人的 Gazebo 仿真。
+    不必完全模仿此设置。
+  -->
+
+  <!--Robot description and related parameter files -->
+  <arg name="robot_description_file" default="$(dirname)/inc/load_ur5.launch.xml" doc="Launch file which populates the 'robot_description' parameter."/>
+  <arg name="joint_limit_params" default="$(find ur_description)/config/ur5/joint_limits.yaml"/>
+  <arg name="kinematics_params" default="$(find ur_description)/config/ur5/default_kinematics.yaml"/>
+  <arg name="physical_params" default="$(find ur_description)/config/ur5/physical_parameters.yaml"/>
+  <arg name="visual_params" default="$(find ur_description)/config/ur5/visual_parameters.yaml"/>
+  <arg name="transmission_hw_interface" default="hardware_interface/EffortJointInterface" doc="The hardware_interface to expose for each joint in the simulated robot (one of: [hardware_interface/PositionJointInterface, hardware_interface/VelocityJointInterface, hardware_interface/EffortJointInterface])"/>
+  <!-- <param name="controller_plugin" value="effort_controllers/JointTrajectoryController" /> -->
+  <!-- 控制器配置 -->
+  <arg name="controller_config_file" default="$(find ur_gazebo)/config/ur5_controllers.yaml" doc="用于定义 ROS-Control 控制器的配置文件。" />
+  <arg name="controllers" default="joint_state_controller eff_joint_traj_controller" doc="默认激活的控制器。" />
+  <arg name="stopped_controllers" default="joint_group_eff_controller" doc="初始加载但不启动的控制器 (如力矩控制器)。" />
+
+  <!-- robot_state_publisher configuration -->
+  <arg name="tf_prefix" default="" doc="tf_prefix used for the robot."/>
+  <arg name="tf_pub_rate" default="125" doc="Rate at which robot_state_publisher should publish transforms."/>
+
+  <!-- Gazebo 参数 -->
+  <arg name="paused" default="false" doc="以暂停模式启动 Gazebo" />
+  <arg name="gui" default="true" doc="启动 Gazebo GUI" />
+  
+
+  <!-- Load urdf on the parameter server -->
+  <include file="$(arg robot_description_file)">
+    <arg name="joint_limit_params" value="$(arg joint_limit_params)"/>
+    <arg name="kinematics_params" value="$(arg kinematics_params)"/>
+    <arg name="physical_params" value="$(arg physical_params)"/>
+    <arg name="visual_params" value="$(arg visual_params)"/>
+    <arg name="transmission_hw_interface" value="$(arg transmission_hw_interface)"/>
+  </include>
+
+  <!-- Robot state publisher -->
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+    <param name="publish_frequency" type="double" value="$(arg tf_pub_rate)" />
+    <param name="tf_prefix" value="$(arg tf_prefix)" />
+  </node>
+
+  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ur_description)/cfg/view_robot.rviz"/> -->
+
+  <!-- Start the 'driver' (ie: Gazebo in this case) -->
+  <include file="$(dirname)/inc/ur_control.launch.xml">
+    <arg name="controller_config_file" value="$(arg controller_config_file)"/>
+    <arg name="controllers" value="$(arg controllers)"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="stopped_controllers" value="$(arg stopped_controllers)"/>
+  </include>
+</launch>
