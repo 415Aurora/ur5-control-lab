@@ -20,7 +20,7 @@ Use the one-click script to build the image, start Gazebo, and launch the GUI:
 The container now uses `docker_entrypoint.sh` as its single startup path, so Docker and local usage both launch the same GUI entrypoint: `rosrun ur5_control_lab main.py`.
 The default Gazebo world now starts with the camera aimed at the UR5, so the robot should be visible as soon as the simulator opens.
 `./run_docker.sh` also creates `exports/experiments/` in the host workspace and mounts the repository `exports/` directory into the container, so experiment exports remain available on the host after the container exits.
-The default startup flow now launches MoveIt alongside Gazebo, so the GUI can execute Cartesian position targets through MoveIt as soon as the app opens.
+The default startup flow now launches MoveIt alongside Gazebo, so the GUI can execute Cartesian position and pose targets through MoveIt as soon as the app opens.
 
 ## Local Usage
 
@@ -71,7 +71,7 @@ If you want separate terminals during development:
 - `requirements.txt` is the shared source of truth for pip-installed Python dependencies.
 - `build/` and `devel/` are generated artifacts. Rebuild them with `catkin_make` instead of editing them manually.
 - The Path Planning tab now records named experiment runs with planner metadata and execution duration.
-- The Path Planning tab now supports Cartesian position targets (`X/Y/Z` in meters) through MoveIt while preserving the current end-effector orientation.
+- The Path Planning tab now supports Cartesian pose targets with `X/Y/Z` position inputs and `Roll/Pitch/Yaw` orientation inputs through MoveIt.
 - Completed runs can be exported from the Recorder tab as `json` and `csv` files under `exports/experiments/`.
 - When started with `./run_docker.sh`, those export files are persisted to the host repository at `exports/experiments/`.
 - The Recorder tab now shows basic experiment metrics, including runtime, joint path length, end-effector path length, speed statistics, and final joint error.

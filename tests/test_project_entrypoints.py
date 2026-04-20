@@ -72,6 +72,10 @@ def test_run_docker_persists_exports_to_host_workspace() -> None:
 def test_gui_export_directory_matches_docker_exports_mount() -> None:
     app = read("src/ur5_control_lab/src/ur5_control_lab/gui/app.py")
     assert '/ "exports" / "experiments"' in app
+    assert "Plan & Execute Cartesian Pose" in app
+    assert "Roll" in app
+    assert "Pitch" in app
+    assert "Yaw" in app
 
 
 def test_package_manifest_covers_runtime_dependencies() -> None:
@@ -150,3 +154,4 @@ def test_readme_mentions_default_moveit_startup_and_cartesian_planning() -> None
     assert "MoveIt" in content
     assert "Cartesian" in content or "cartesian" in content
     assert "X/Y/Z" in content or "position target" in content.lower()
+    assert "pose" in content.lower()

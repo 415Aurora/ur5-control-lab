@@ -5,6 +5,7 @@ import threading
 import numpy as np
 import time
 import sys
+import math
 from pathlib import Path
 
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -94,6 +95,24 @@ class UR5LabApp(ctk.CTk):
             self.moveit_planner = MoveItPositionPlanner()
         except Exception as exc:
             self.moveit_error = str(exc)
+
+    def _quaternion_from_euler_degrees(self, roll_deg, pitch_deg, yaw_deg):
+        roll = math.radians(roll_deg)
+        pitch = math.radians(pitch_deg)
+        yaw = math.radians(yaw_deg)
+
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+        cp = math.cos(pitch * 0.5)
+        sp = math.sin(pitch * 0.5)
+        cr = math.cos(roll * 0.5)
+        sr = math.sin(roll * 0.5)
+
+        qw = cr * cp * cy + sr * sp * sy
+        qx = sr * cp * cy - cr * sp * sy
+        qy = cr * sp * cy + sr * cp * sy
+        qz = cr * cp * sy - sr * sp * cy
+        return qx, qy, qz, qw
 
     def setup_ui(self):
         self.title("UR5 Control Lab - Professional Edition")
@@ -251,28 +270,38 @@ class UR5LabApp(ctk.CTk):
         cartesian_frame.pack(fill="x", pady=(0, 20), padx=20)
         ctk.CTkLabel(
             cartesian_frame,
-            text="Cartesian Position Target (X/Y/Z in meters)",
+            text="Cartesian Pose Target (X/Y/Z in meters, Roll/Pitch/Yaw in degrees)",
             font=ctk.CTkFont(size=16, weight="bold"),
         ).pack(pady=(15, 10))
 
         cartesian_inputs = ctk.CTkFrame(cartesian_frame, fg_color="transparent")
         cartesian_inputs.pack(fill="x", padx=10, pady=(0, 10))
-        for column in range(3):
+        for column in range(6):
             cartesian_inputs.grid_columnconfigure(column, weight=1)
 
         self.entry_target_x = ctk.CTkEntry(cartesian_inputs)
         self.entry_target_y = ctk.CTkEntry(cartesian_inputs)
         self.entry_target_z = ctk.CTkEntry(cartesian_inputs)
+        self.entry_target_roll = ctk.CTkEntry(cartesian_inputs)
+        self.entry_target_pitch = ctk.CTkEntry(cartesian_inputs)
+        self.entry_target_yaw = ctk.CTkEntry(cartesian_inputs)
         for idx, (label, entry) in enumerate(
-            [("X", self.entry_target_x), ("Y", self.entry_target_y), ("Z", self.entry_target_z)]
+            [
+                ("X", self.entry_target_x),
+                ("Y", self.entry_target_y),
+                ("Z", self.entry_target_z),
+                ("Roll", self.entry_target_roll),
+                ("Pitch", self.entry_target_pitch),
+                ("Yaw", self.entry_target_yaw),
+            ]
         ):
             ctk.CTkLabel(cartesian_inputs, text=label).grid(row=0, column=idx, padx=10, pady=(0, 5), sticky="w")
             entry.grid(row=1, column=idx, padx=10, pady=(0, 10), sticky="ew")
 
         self.btn_cartesian_plan = ctk.CTkButton(
             cartesian_frame,
-            text="Plan & Execute Cartesian",
-            command=self.plan_cartesian_position,
+            text="Plan & Execute Cartesian Pose",
+            command=self.plan_cartesian_pose,
             height=40,
             font=ctk.CTkFont(size=14, weight="bold"),
         )
@@ -481,17 +510,19 @@ class UR5LabApp(ctk.CTk):
         self.entry_experiment_name.delete(0, "end")
         self.entry_experiment_name.insert(0, self._default_experiment_name())
 
-    def _build_position_experiment_config(self, target_joint_positions):
+    def _build_moveit_experiment_config(self, target_joint_positions, planner_id):
         target_joint_deg = [float(np.degrees(value)) for value in target_joint_positions]
         return ExperimentConfig(
             name=self.entry_experiment_name.get().strip() or self._default_experiment_name(),
             target_joints_deg=target_joint_deg,
             duration_seconds=float(self.entry_duration.get().strip() or "4.0"),
-            planner_id="moveit_position",
+            planner_id=planner_id,
             sample_rate_hz=10.0,
             notes=(
                 f"Cartesian target x={self.entry_target_x.get().strip()} "
-                f"y={self.entry_target_y.get().strip()} z={self.entry_target_z.get().strip()}"
+                f"y={self.entry_target_y.get().strip()} z={self.entry_target_z.get().strip()} "
+                f"roll={self.entry_target_roll.get().strip()} pitch={self.entry_target_pitch.get().strip()} "
+                f"yaw={self.entry_target_yaw.get().strip()}"
             ),
         )
 
@@ -541,7 +572,7 @@ class UR5LabApp(ctk.CTk):
         except Exception as e:
             self.plan_status.configure(text=f"Error: {e}", text_color="red")
 
-    def plan_cartesian_position(self):
+    def plan_cartesian_pose(self):
         if self.moveit_planner is None:
             self.cartesian_status.configure(
                 text=f"Cartesian planner unavailable: {self.moveit_error}",
@@ -553,34 +584,38 @@ class UR5LabApp(ctk.CTk):
             x = float(self.entry_target_x.get())
             y = float(self.entry_target_y.get())
             z = float(self.entry_target_z.get())
+            roll = float(self.entry_target_roll.get() or "0.0")
+            pitch = float(self.entry_target_pitch.get() or "0.0")
+            yaw = float(self.entry_target_yaw.get() or "0.0")
         except ValueError:
             self.cartesian_status.configure(
-                text="Cartesian target must be valid X/Y/Z numbers",
+                text="Cartesian target must be valid X/Y/Z/Roll/Pitch/Yaw numbers",
                 text_color="red",
             )
             return
 
-        self.cartesian_status.configure(text="Cartesian status: Planning...", text_color="yellow")
+        self.cartesian_status.configure(text="Cartesian pose status: Planning...", text_color="yellow")
         threading.Thread(
-            target=self._run_cartesian_position_plan,
-            args=(x, y, z),
+            target=self._run_cartesian_pose_plan,
+            args=(x, y, z, roll, pitch, yaw),
             daemon=True,
         ).start()
 
-    def _run_cartesian_position_plan(self, x, y, z):
-        result = self.moveit_planner.plan_position_target(x, y, z)
+    def _run_cartesian_pose_plan(self, x, y, z, roll, pitch, yaw):
+        qx, qy, qz, qw = self._quaternion_from_euler_degrees(roll, pitch, yaw)
+        result = self.moveit_planner.plan_pose_target(x, y, z, qx, qy, qz, qw)
         if not result["success"]:
             self.after(0, lambda: self.cartesian_status.configure(
-                text=f"Cartesian status: {result['message']}",
+                text=f"Cartesian pose status: {result['message']}",
                 text_color="red",
             ))
             return
 
         target_joint_positions = result["target_joint_positions"] or list(self.current_joints)
-        config = self._build_position_experiment_config(target_joint_positions)
+        config = self._build_moveit_experiment_config(target_joint_positions, result["planner_id"])
         self._start_experiment_recording(config)
         self.after(0, lambda: self.cartesian_status.configure(
-            text="Cartesian status: Executing...",
+            text="Cartesian pose status: Executing...",
             text_color="green",
         ))
 
@@ -593,7 +628,7 @@ class UR5LabApp(ctk.CTk):
         finally:
             self._finish_experiment_recording(warning_message=warning_message)
 
-        final_status = "Cartesian status: Succeeded" if warning_message is None else f"Cartesian status: {warning_message}"
+        final_status = "Cartesian pose status: Succeeded" if warning_message is None else f"Cartesian pose status: {warning_message}"
         final_color = "#50FA7B" if warning_message is None else "orange"
         self.after(0, lambda: self.cartesian_status.configure(
             text=final_status,

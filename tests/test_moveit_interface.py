@@ -100,3 +100,22 @@ def test_execute_plan_stops_and_clears_targets_after_execution() -> None:
     assert result is True
     assert planner.group.stop_called is True
     assert planner.group.clear_called is True
+
+
+def test_plan_pose_target_overrides_orientation_components() -> None:
+    current_pose = _make_pose(0.1, 0.2, 0.3, 0.0, 0.0, 0.0, 1.0)
+    planner = MoveItPositionPlanner(
+        move_group=FakeMoveGroup(current_pose, (True, _make_plan(0.6, 0.5, 0.4, 0.3, 0.2, 0.1), 0.0, None))
+    )
+
+    result = planner.plan_pose_target(0.9, 0.8, 0.7, 0.11, 0.22, 0.33, 0.44)
+
+    assert result["success"] is True
+    assert planner.group.target_pose.position.x == 0.9
+    assert planner.group.target_pose.position.y == 0.8
+    assert planner.group.target_pose.position.z == 0.7
+    assert planner.group.target_pose.orientation.x == 0.11
+    assert planner.group.target_pose.orientation.y == 0.22
+    assert planner.group.target_pose.orientation.z == 0.33
+    assert planner.group.target_pose.orientation.w == 0.44
+    assert result["planner_id"] == "moveit_pose"
