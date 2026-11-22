@@ -2,6 +2,12 @@
 
 **Robotics engineering portfolio project.** A ROS Noetic + Gazebo simulation application for controlling a UR5 manipulator through MoveIt, with a CustomTkinter interface and experiment recording.
 
+## System overview
+
+![UR5 target selection, MoveIt planning, ROS trajectory control, Gazebo simulation and metric exports](docs/visuals/ros-pipeline.svg)
+
+*Software/simulation architecture diagram; it does not depict real robot execution.*
+
 ## What this repository demonstrates
 
 | Area | Implementation / evidence |
