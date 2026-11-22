@@ -1,3 +1,33 @@
+# UR5 Control Lab — ROS/Gazebo Robot Control and Motion Planning
+
+**Robotics engineering portfolio project.** A ROS Noetic + Gazebo simulation application for controlling a UR5 manipulator through MoveIt, with a CustomTkinter interface and experiment recording.
+
+## What this repository demonstrates
+
+| Area | Implementation / evidence |
+| --- | --- |
+| ROS application integration | [ROS package](src/ur5_control_lab/), launcher scripts and Gazebo/MoveIt startup integration |
+| Robot motion planning | MoveIt-based joint and Cartesian target execution; pose goals include position and roll/pitch/yaw |
+| Experimental instrumentation | Run metadata and CSV/JSON export; reported measurements include runtime, joint/EE path lengths, speed statistics and final joint error |
+| Reproducible environment | [Dockerfile](Dockerfile), [Docker launcher](run_docker.sh), [local launcher](run_project.sh) |
+| Software regression tests | [Tests](tests/) for planner interface, pose targets, entrypoints and experiment tracking |
+
+## Quick start
+
+```bash
+./run_docker.sh
+```
+
+A Docker-compatible host with a working graphical display setup is required for Gazebo and the GUI. For manual/local setup, follow the instructions below. Successful startup, motion execution and runtime metrics must be verified on the target machine rather than assumed from the scripts alone.
+
+## Scope and missing validation
+
+The current documentation describes a ROS Noetic/Gazebo/MoveIt software control lab; it does **not** establish real-UR5 deployment, sim-to-real transfer or comparative planner superiority. To turn it into a stronger internship demonstration, add a short screencast, a reproducible example trajectory and a results table comparing at least two planning scenarios using the existing recorder.
+
+---
+
+## Installation and developer details
+
 # UR5 Control Lab
 
 This project provides a comprehensive platform for simulating and controlling a UR5 robot using ROS Noetic and Gazebo.
