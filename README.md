@@ -8,6 +8,20 @@
 
 *Software/simulation architecture diagram; it does not depict real robot execution.*
 
+## Visual overview
+
+![Franka Panda simulation in Gazebo](docs/media/franka-gazebo.png)
+
+*Gazebo simulation environment; this is not a physical-robot experiment.*
+
+![Joint-centering gain sweep](docs/media/joint-centering-sweep.png)
+
+*Historical offline sweep: stronger joint-centering gains trade reduced mean center offset for greater joint displacement. The two y axes have different scales. These numerical results are not physical-robot tracking accuracy.*
+
+[Figure context, source data and limitations](docs/visual-results.md)
+
+> These artifacts come from a separate local Franka/null-space development version. This public branch does not yet contain that extension; the gallery is not a claim that these experiments are reproducible from the currently published code.
+
 ## What this repository demonstrates
 
 | Area | Implementation / evidence |

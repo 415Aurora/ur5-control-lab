@@ -1,0 +1,29 @@
+{
+  "prepared": "2026-11-24",
+  "assets": [
+    {
+      "file": "franka-gazebo.png",
+      "source_relative_to_project": "docs/TongjiThesis-master/figure/gazebo_franka.png",
+      "sha256": "8e3ab2edc1d904e0dae7e035edf4720ae6941d6ff835c8636cc5cf852c1e5c50",
+      "bytes": 268526,
+      "interpretation": "Simulator screenshot; not a physical-robot photograph.",
+      "transformation": "none; byte-for-byte copy"
+    },
+    {
+      "file": "joint-centering-sweep.png",
+      "source_relative_to_project": "docs/TongjiThesis-master/figure/6-10a-centering-gain-sweep.png",
+      "sha256": "c1b58d4c89b2ca55cb619e0fd40779fd2b082b7f3e04710d22645ebf0bf8c8f7",
+      "bytes": 147396,
+      "interpretation": "Historical offline numerical sweep; two different y axes.",
+      "transformation": "none; byte-for-byte copy"
+    },
+    {
+      "file": "joint-centering-sweep.csv",
+      "source_relative_to_project": "exports/experiments/nullspace_centering_gain_sweep.csv",
+      "sha256": "b654ca144239877bc19eb55941450a8045bd8f0a117076fad671bc63ba85d9d2",
+      "bytes": 468,
+      "interpretation": "Source table for the gain sweep.",
+      "transformation": "none; byte-for-byte copy"
+    }
+  ]
+}
